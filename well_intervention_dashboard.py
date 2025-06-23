@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-import streamlit as
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -336,4 +335,3 @@ st.markdown("""
     <p>🛢️ Predictive Analytics • 📊 Real-time Insights • 🎯 Optimized Planning</p>
 </div>
 """, unsafe_allow_html=True)
-
