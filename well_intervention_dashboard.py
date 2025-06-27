@@ -1,442 +1,469 @@
-# Create a comprehensive Streamlit dashboard for well intervention prediction
+1import streamlit as st
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import json
-
-# Create the main Streamlit app file
-streamlit_app_code = '''
-import streamlit as st
-import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
-import warnings
-warnings.filterwarnings('ignore')
+import datetime
+from datetime import timedelta
+import numpy as np
 
-# Configure page
+# Set page config
 st.set_page_config(
-    page_title="Well Intervention AI Dashboard",
+    page_title="Well Intervention Planning System",
     page_icon="🛢️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS for better UI
 st.markdown("""
 <style>
     .main-header {
         font-size: 2.5rem;
-        font-weight: bold;
         color: #1f4e79;
         text-align: center;
         margin-bottom: 2rem;
+        font-weight: bold;
     }
     .metric-card {
-        background-color: #f0f2f6;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #1f4e79;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin: 0.5rem 0;
     }
-    .success-metric {
-        border-left-color: #28a745;
+    .status-ok {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 0.25rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
     }
-    .warning-metric {
-        border-left-color: #ffc107;
+    .status-warning {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 0.25rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
     }
-    .danger-metric {
-        border-left-color: #dc3545;
+    .status-critical {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 0.25rem 0.5rem;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    .sidebar .sidebar-content {
+        background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Generate sample data
+# Sample data generation
 @st.cache_data
-def load_sample_data():
-    np.random.seed(42)
-    
-    # Well intervention historical data
-    n_records = 500
-    
-    well_data = {
-        'well_id': [f'WELL_{i:03d}' for i in range(1, n_records + 1)],
-        'field': np.random.choice(['North Sea Alpha', 'North Sea Beta', 'North Sea Gamma'], n_records),
-        'intervention_type': np.random.choice(['Wireline', 'Coiled Tubing', 'Workover', 'ESP Install'], n_records),
-        'well_age_years': np.random.normal(15, 8, n_records).clip(1, 40),
-        'depth_ft': np.random.normal(12000, 3000, n_records).clip(5000, 25000),
-        'pressure_psi': np.random.normal(4500, 1200, n_records).clip(1000, 8000),
-        'temperature_f': np.random.normal(180, 40, n_records).clip(80, 300),
-        'water_cut_percent': np.random.beta(2, 5, n_records) * 100,
-        'last_intervention_days': np.random.exponential(365, n_records).clip(30, 2000),
-        'tool_condition_score': np.random.normal(7.5, 1.5, n_records).clip(1, 10),
-        'weather_condition': np.random.choice(['Good', 'Moderate', 'Poor'], n_records, p=[0.6, 0.3, 0.1]),
-        'crew_experience_years': np.random.normal(12, 5, n_records).clip(2, 30),
-        'intervention_date': [datetime.now() - timedelta(days=int(x)) for x in np.random.exponential(180, n_records)],
+def generate_sample_data():
+    # Well data
+    wells_data = {
+        'Well_ID': ['Well_A', 'Well_B', 'Well_C', 'Well_D', 'Well_E', 'Well_F'],
+        'Platform': ['Platform_Alpha', 'Platform_Beta', 'Platform_Alpha', 'Platform_Gamma', 'Platform_Beta', 'Platform_Gamma'],
+        'Well_Type': ['Production', 'Injection', 'Production', 'Production', 'Injection', 'Production'],
+        'Status': ['Active', 'Active', 'Maintenance', 'Active', 'Shutdown', 'Active'],
+        'Last_Intervention': ['2024-12-10', '2024-11-15', '2025-01-05', '2024-10-20', '2024-09-30', '2025-01-12'],
+        'Next_PM_Due': ['2025-07-01', '2025-06-15', '2025-08-01', '2025-05-20', '2025-04-30', '2025-08-12'],
+        'Master_Valve': ['Pass', 'Pass', 'Fail', 'Pass', 'Pass', 'Pass'],
+        'Swab_Valve': ['Fail', 'Pass', 'Pass', 'Pass', 'Fail', 'Pass'],
+        'Wing_Valve': ['Pass', 'Pass', 'Pass', 'Fail', 'Pass', 'Pass'],
+        'Integrity_Issues': ['Swab leak', 'None', 'Master valve stuck', 'Wing valve leak', 'Swab leak', 'None'],
+        'Priority': ['High', 'Low', 'Critical', 'Medium', 'High', 'Low']
     }
     
-    # Calculate success probability based on realistic factors
-    success_prob = (
-        0.9 - 
-        (well_data['well_age_years'] - 10) * 0.01 +  # Older wells slightly riskier
-        (well_data['tool_condition_score'] - 5) * 0.05 +  # Better tools = higher success
-        (well_data['crew_experience_years'] - 10) * 0.01 +  # Experience matters
-        np.where(well_data['weather_condition'] == 'Poor', -0.15, 0) +  # Weather impact
-        np.where(well_data['intervention_type'] == 'Workover', -0.1, 0) +  # Workover more complex
-        np.random.normal(0, 0.1, n_records)  # Random variation
-    ).clip(0.1, 0.95)
+    # Tools and equipment data
+    tools_data = {
+        'Tool_Equipment': ['Wireline Unit', 'Coiled Tubing', 'Wellhead Control Panel', 'Subsea Tree', 'Slickline Tools', 
+                          'Snubbing Unit', 'Pumping Unit', 'BOP Stack', 'Workover Rig', 'Logging Tools'],
+        'Category': ['Intervention', 'Intervention', 'Surface Equipment', 'Subsea Equipment', 'Intervention',
+                    'Intervention', 'Stimulation', 'Safety Equipment', 'Heavy Equipment', 'Logging'],
+        'Description': ['For logging & intervention operations', 'For cleanouts, acidizing, etc.', 
+                       'Surface safety system control', 'Subsea well control system', 'Simple mechanical jobs',
+                       'High pressure intervention', 'Fluid pumping operations', 'Blowout prevention',
+                       'Heavy workover operations', 'Formation evaluation'],
+        'Status': ['Available', 'In Use', 'Available', 'Maintenance', 'Available', 
+                  'Available', 'In Use', 'Available', 'Scheduled', 'Available'],
+        'Next_Maintenance': ['2025-03-15', '2025-04-20', '2025-02-28', '2025-02-10', '2025-05-01',
+                           '2025-03-30', '2025-04-15', '2025-02-25', '2025-06-01', '2025-03-10']
+    }
     
-    well_data['success_probability'] = success_prob
-    well_data['predicted_success'] = success_prob > 0.7
-    well_data['actual_success'] = np.random.binomial(1, success_prob, n_records).astype(bool)
+    # Platform bed space data
+    bed_space_data = {
+        'Platform': ['Platform_Alpha', 'Platform_Beta', 'Platform_Gamma'],
+        'Total_Beds': [20, 15, 25],
+        'Occupied_Beds': [12, 5, 18],
+        'Available_Beds': [8, 10, 7],
+        'Forecast_Change': ['+2 next week', '-3 next week', '+1 next week']
+    }
     
-    # NPT (Non-Productive Time) prediction
-    base_npt = np.where(well_data['actual_success'], 
-                       np.random.exponential(8, n_records),  # Successful jobs
-                       np.random.exponential(24, n_records))  # Failed jobs
-    well_data['predicted_npt_hours'] = base_npt.clip(0, 72)
+    # Work disciplines data
+    disciplines_data = {
+        'Discipline': ['Well Services', 'Subsea Engineering', 'Production Technology', 'Logistics & Marine', 
+                      'HSE', 'Instrumentation & Controls', 'Drilling', 'Completions'],
+        'Personnel_Required': [15, 8, 12, 6, 4, 10, 20, 14],
+        'Current_Available': [12, 8, 10, 5, 4, 8, 18, 12],
+        'Certification_Level': ['Level 3', 'Level 4', 'Level 3', 'Level 2', 'Level 5', 'Level 3', 'Level 4', 'Level 3']
+    }
     
-    # Cost estimation
-    base_cost = 50000 + well_data['depth_ft'] * 2 + well_data['predicted_npt_hours'] * 5000
-    well_data['estimated_cost_usd'] = base_cost + np.random.normal(0, 10000, n_records)
-    
-    return pd.DataFrame(well_data)
+    return pd.DataFrame(wells_data), pd.DataFrame(tools_data), pd.DataFrame(bed_space_data), pd.DataFrame(disciplines_data)
 
 # Load data
-df = load_sample_data()
+wells_df, tools_df, bed_space_df, disciplines_df = generate_sample_data()
 
-# Header
-st.markdown('<h1 class="main-header">🛢️ Well Intervention AI Dashboard</h1>', unsafe_allow_html=True)
-st.markdown("**Predictive Analytics for Smarter, Safer Well Interventions**")
+# Sidebar navigation
+st.sidebar.title("🛢️ Navigation")
+page = st.sidebar.selectbox("Select Page", [
+    "Dashboard", "Wells Management", "Scheduling & Planning", "Tools & Equipment", 
+    "Logistics", "Work Disciplines", "Well History", "Integrity Management"
+])
 
-# Sidebar for filters
-st.sidebar.header("🔧 Intervention Filters")
-selected_fields = st.sidebar.multiselect("Select Fields", df['field'].unique(), default=df['field'].unique())
-selected_types = st.sidebar.multiselect("Intervention Types", df['intervention_type'].unique(), default=df['intervention_type'].unique())
-success_threshold = st.sidebar.slider("Success Probability Threshold", 0.0, 1.0, 0.7, 0.05)
+# Main header
+st.markdown('<h1 class="main-header">Well Intervention Planning System</h1>', unsafe_allow_html=True)
 
-# Filter data
-filtered_df = df[
-    (df['field'].isin(selected_fields)) & 
-    (df['intervention_type'].isin(selected_types))
-]
-
-# Main dashboard layout
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.markdown('<div class="metric-card success-metric">', unsafe_allow_html=True)
-    high_success_count = len(filtered_df[filtered_df['success_probability'] >= success_threshold])
-    st.metric("High Success Probability", f"{high_success_count}", f"{high_success_count/len(filtered_df)*100:.1f}%")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col2:
-    st.markdown('<div class="metric-card warning-metric">', unsafe_allow_html=True)
-    avg_npt = filtered_df['predicted_npt_hours'].mean()
-    st.metric("Avg Predicted NPT", f"{avg_npt:.1f} hrs", f"${avg_npt*5000:,.0f}")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col3:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    avg_cost = filtered_df['estimated_cost_usd'].mean()
-    st.metric("Avg Intervention Cost", f"${avg_cost:,.0f}", f"±${filtered_df['estimated_cost_usd'].std():,.0f}")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col4:
-    st.markdown('<div class="metric-card danger-metric">', unsafe_allow_html=True)
-    risk_count = len(filtered_df[filtered_df['success_probability'] < 0.5])
-    st.metric("High Risk Interventions", f"{risk_count}", f"{risk_count/len(filtered_df)*100:.1f}%")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Charts section
-st.markdown("---")
-
-# Row 1: Success Probability Distribution and Risk Factors
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📊 Success Probability Distribution")
-    fig_hist = px.histogram(
-        filtered_df, 
-        x='success_probability', 
-        nbins=20,
-        title="Distribution of Intervention Success Probabilities",
-        color_discrete_sequence=['#1f4e79']
-    )
-    fig_hist.add_vline(x=success_threshold, line_dash="dash", line_color="red", 
-                      annotation_text=f"Threshold: {success_threshold}")
-    st.plotly_chart(fig_hist, use_container_width=True)
-
-with col2:
-    st.subheader("⚠️ Risk Factors Analysis")
-    risk_factors = filtered_df.groupby('intervention_type').agg({
-        'success_probability': 'mean',
-        'predicted_npt_hours': 'mean',
-        'estimated_cost_usd': 'mean'
-    }).round(2)
+if page == "Dashboard":
+    st.header("📊 Executive Dashboard")
     
-    fig_risk = px.scatter(
-        risk_factors.reset_index(),
-        x='predicted_npt_hours',
-        y='success_probability',
-        size='estimated_cost_usd',
-        color='intervention_type',
-        title="Risk vs NPT by Intervention Type",
-        labels={'predicted_npt_hours': 'Predicted NPT (hours)', 
-                'success_probability': 'Success Probability'}
-    )
-    st.plotly_chart(fig_risk, use_container_width=True)
-
-# Row 2: Time Series and Well Performance
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📈 Intervention Timeline")
-    timeline_data = filtered_df.groupby(filtered_df['intervention_date'].dt.date).size().reset_index()
-    timeline_data.columns = ['date', 'count']
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
     
-    fig_timeline = px.line(
-        timeline_data,
-        x='date',
-        y='count',
-        title="Interventions Over Time",
-        markers=True
-    )
-    st.plotly_chart(fig_timeline, use_container_width=True)
-
-with col2:
-    st.subheader("🎯 Well Performance Factors")
-    fig_factors = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('Well Age vs Success', 'Tool Condition vs Success', 
-                       'Crew Experience vs Success', 'Weather Impact'),
-        specs=[[{"secondary_y": False}, {"secondary_y": False}],
-               [{"secondary_y": False}, {"secondary_y": False}]]
-    )
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>Active Wells</h3>
+            <h2>4</h2>
+            <p>Out of 6 total</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Well age
-    fig_factors.add_trace(
-        go.Scatter(x=filtered_df['well_age_years'], y=filtered_df['success_probability'],
-                  mode='markers', name='Age vs Success', opacity=0.6),
-        row=1, col=1
-    )
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>Overdue PMs</h3>
+            <h2>2</h2>
+            <p>Require attention</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Tool condition
-    fig_factors.add_trace(
-        go.Scatter(x=filtered_df['tool_condition_score'], y=filtered_df['success_probability'],
-                  mode='markers', name='Tool vs Success', opacity=0.6),
-        row=1, col=2
-    )
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>Critical Issues</h3>
+            <h2>1</h2>
+            <p>Well C - Master valve</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Crew experience
-    fig_factors.add_trace(
-        go.Scatter(x=filtered_df['crew_experience_years'], y=filtered_df['success_probability'],
-                  mode='markers', name='Experience vs Success', opacity=0.6),
-        row=2, col=1
-    )
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>Available Beds</h3>
+            <h2>25</h2>
+            <p>Across all platforms</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Weather impact
-    weather_impact = filtered_df.groupby('weather_condition')['success_probability'].mean()
-    fig_factors.add_trace(
-        go.Bar(x=weather_impact.index, y=weather_impact.values, name='Weather Impact'),
-        row=2, col=2
-    )
+    # Charts section
+    col1, col2 = st.columns(2)
     
-    fig_factors.update_layout(height=500, showlegend=False, title_text="Performance Factor Analysis")
-    st.plotly_chart(fig_factors, use_container_width=True)
-
-# Intervention Planning Section
-st.markdown("---")
-st.subheader("🎯 Intervention Planning Assistant")
-
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.markdown("**Plan New Intervention**")
+    with col1:
+        st.subheader("Well Status Distribution")
+        status_counts = wells_df['Status'].value_counts()
+        fig_pie = px.pie(values=status_counts.values, names=status_counts.index, 
+                        color_discrete_sequence=['#2E8B57', '#FF6347', '#4682B4', '#DAA520'])
+        st.plotly_chart(fig_pie, use_container_width=True)
     
-    new_well_field = st.selectbox("Field", df['field'].unique())
-    new_intervention_type = st.selectbox("Intervention Type", df['intervention_type'].unique())
-    new_well_age = st.slider("Well Age (years)", 1, 40, 15)
-    new_depth = st.slider("Depth (ft)", 5000, 25000, 12000, 500)
-    new_tool_condition = st.slider("Tool Condition Score", 1.0, 10.0, 7.5, 0.5)
-    new_crew_experience = st.slider("Crew Experience (years)", 2, 30, 12)
-    new_weather = st.selectbox("Weather Condition", ['Good', 'Moderate', 'Poor'])
+    with col2:
+        st.subheader("Platform Bed Space Utilization")
+        fig_bar = px.bar(bed_space_df, x='Platform', y=['Occupied_Beds', 'Available_Beds'],
+                        title="Bed Space by Platform", barmode='stack')
+        st.plotly_chart(fig_bar, use_container_width=True)
     
-    if st.button("🔮 Predict Intervention Outcome", type="primary"):
-        # Simple prediction logic based on the factors
-        base_success = 0.8
-        age_factor = max(0, (15 - new_well_age) * 0.01)
-        tool_factor = (new_tool_condition - 5) * 0.05
-        crew_factor = (new_crew_experience - 10) * 0.01
-        weather_factor = {'Good': 0, 'Moderate': -0.05, 'Poor': -0.15}[new_weather]
-        type_factor = {'Workover': -0.1, 'Wireline': 0.05, 'Coiled Tubing': 0, 'ESP Install': -0.05}[new_intervention_type]
-        
-        predicted_success = min(0.95, max(0.1, base_success + age_factor + tool_factor + crew_factor + weather_factor + type_factor))
-        predicted_npt = max(2, 12 - (predicted_success - 0.5) * 20 + np.random.normal(0, 2))
-        predicted_cost = 50000 + new_depth * 2 + predicted_npt * 5000
-        
-        st.session_state.prediction_results = {
-            'success': predicted_success,
-            'npt': predicted_npt,
-            'cost': predicted_cost
-        }
+    # Recent activities
+    st.subheader("🔔 Recent Activities & Alerts")
+    activities = [
+        {"Date": "2025-01-15", "Activity": "Well C - Master valve failure detected", "Priority": "Critical"},
+        {"Date": "2025-01-14", "Activity": "Coiled tubing unit mobilized to Platform Beta", "Priority": "Medium"},
+        {"Date": "2025-01-13", "Activity": "Well A - Swab valve test failed", "Priority": "High"},
+        {"Date": "2025-01-12", "Activity": "Platform Alpha - 2 additional beds available", "Priority": "Low"}
+    ]
+    
+    for activity in activities:
+        priority_class = f"status-{'critical' if activity['Priority'] == 'Critical' else 'warning' if activity['Priority'] == 'High' else 'ok'}"
+        st.markdown(f"""
+        <div style="border-left: 4px solid #1f4e79; padding: 10px; margin: 10px 0; background-color: #f8f9fa;">
+            <strong>{activity['Date']}</strong> - {activity['Activity']} 
+            <span class="{priority_class}">{activity['Priority']}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
-with col2:
-    if 'prediction_results' in st.session_state:
-        results = st.session_state.prediction_results
-        
-        st.markdown("**🎯 Prediction Results**")
-        
-        # Success probability gauge
-        fig_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number+delta",
-            value = results['success'] * 100,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Success Probability (%)"},
-            delta = {'reference': 70},
-            gauge = {
-                'axis': {'range': [None, 100]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [0, 50], 'color': "lightgray"},
-                    {'range': [50, 70], 'color': "yellow"},
-                    {'range': [70, 100], 'color': "lightgreen"}],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 70}}))
-        fig_gauge.update_layout(height=300)
-        st.plotly_chart(fig_gauge, use_container_width=True)
-        
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.metric("Predicted NPT", f"{results['npt']:.1f} hours")
-        with col_b:
-            st.metric("Estimated Cost", f"${results['cost']:,.0f}")
-        
-        # Recommendations
-        st.markdown("**💡 AI Recommendations:**")
-        if results['success'] > 0.8:
-            st.success("✅ High probability of success. Proceed with confidence.")
-        elif results['success'] > 0.6:
-            st.warning("⚠️ Moderate risk. Consider additional precautions.")
-        else:
-            st.error("🚨 High risk intervention. Review plan and consider alternatives.")
-        
-        # Specific recommendations based on inputs
-        recommendations = []
-        if new_tool_condition < 6:
-            recommendations.append("🔧 Consider upgrading tool condition before intervention")
-        if new_weather == 'Poor':
-            recommendations.append("🌦️ Weather conditions may impact success - consider postponing")
-        if new_crew_experience < 8:
-            recommendations.append("👥 Consider adding experienced crew member")
-        if new_well_age > 20:
-            recommendations.append("⏰ Older well - extra caution with wellbore integrity")
-        
-        for rec in recommendations:
-            st.info(rec)
+elif page == "Wells Management":
+    st.header("🏭 Wells Management")
+    
+    # Filters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        platform_filter = st.selectbox("Filter by Platform", ["All"] + list(wells_df['Platform'].unique()))
+    with col2:
+        status_filter = st.selectbox("Filter by Status", ["All"] + list(wells_df['Status'].unique()))
+    with col3:
+        priority_filter = st.selectbox("Filter by Priority", ["All"] + list(wells_df['Priority'].unique()))
+    
+    # Apply filters
+    filtered_df = wells_df.copy()
+    if platform_filter != "All":
+        filtered_df = filtered_df[filtered_df['Platform'] == platform_filter]
+    if status_filter != "All":
+        filtered_df = filtered_df[filtered_df['Status'] == status_filter]
+    if priority_filter != "All":
+        filtered_df = filtered_df[filtered_df['Priority'] == priority_filter]
+    
+    # Wells table with expandable details
+    st.subheader("Wells Overview")
+    
+    for idx, well in filtered_df.iterrows():
+        with st.expander(f"🔧 {well['Well_ID']} - {well['Platform']} ({well['Status']})"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**Well Type:** {well['Well_Type']}")
+                st.write(f"**Last Intervention:** {well['Last_Intervention']}")
+                st.write(f"**Next PM Due:** {well['Next_PM_Due']}")
+                st.write(f"**Priority:** {well['Priority']}")
+            
+            with col2:
+                st.write("**Valve Test Results:**")
+                st.write(f"• Master Valve: {well['Master_Valve']}")
+                st.write(f"• Swab Valve: {well['Swab_Valve']}")
+                st.write(f"• Wing Valve: {well['Wing_Valve']}")
+                
+                if well['Integrity_Issues'] != 'None':
+                    st.error(f"⚠️ Integrity Issue: {well['Integrity_Issues']}")
+            
+            col3, col4, col5 = st.columns(3)
+            with col3:
+                if st.button(f"Schedule Maintenance - {well['Well_ID']}", key=f"schedule_{well['Well_ID']}"):
+                    st.success(f"Maintenance scheduled for {well['Well_ID']}")
+            with col4:
+                if st.button(f"View History - {well['Well_ID']}", key=f"history_{well['Well_ID']}"):
+                    st.info(f"Opening history for {well['Well_ID']}")
+            with col5:
+                if st.button(f"Generate Report - {well['Well_ID']}", key=f"report_{well['Well_ID']}"):
+                    st.info(f"Generating report for {well['Well_ID']}")
 
-# Data table section
-st.markdown("---")
-st.subheader("📋 Intervention Records")
-
-# Add filters for the table
-col1, col2, col3 = st.columns(3)
-with col1:
-    show_high_risk = st.checkbox("Show High Risk Only (< 50% success)")
-with col2:
-    show_recent = st.checkbox("Show Recent Only (last 90 days)")
-with col3:
-    sort_by = st.selectbox("Sort by", ['intervention_date', 'success_probability', 'predicted_npt_hours', 'estimated_cost_usd'])
-
-# Apply additional filters
-display_df = filtered_df.copy()
-if show_high_risk:
-    display_df = display_df[display_df['success_probability'] < 0.5]
-if show_recent:
-    recent_date = datetime.now() - timedelta(days=90)
-    display_df = display_df[display_df['intervention_date'] >= recent_date]
-
-display_df = display_df.sort_values(sort_by, ascending=False)
-
-# Format the dataframe for display
-display_columns = [
-    'well_id', 'field', 'intervention_type', 'success_probability', 
-    'predicted_npt_hours', 'estimated_cost_usd', 'intervention_date'
-]
-
-formatted_df = display_df[display_columns].copy()
-formatted_df['success_probability'] = formatted_df['success_probability'].apply(lambda x: f"{x:.1%}")
-formatted_df['predicted_npt_hours'] = formatted_df['predicted_npt_hours'].apply(lambda x: f"{x:.1f}")
-formatted_df['estimated_cost_usd'] = formatted_df['estimated_cost_usd'].apply(lambda x: f"${x:,.0f}")
-formatted_df['intervention_date'] = formatted_df['intervention_date'].dt.strftime('%Y-%m-%d')
-
-st.dataframe(
-    formatted_df,
-    use_container_width=True,
-    column_config={
-        "well_id": "Well ID",
-        "field": "Field",
-        "intervention_type": "Type",
-        "success_probability": "Success %",
-        "predicted_npt_hours": "NPT (hrs)",
-        "estimated_cost_usd": "Cost",
-        "intervention_date": "Date"
+elif page == "Scheduling & Planning":
+    st.header("📅 Scheduling & Work Planning")
+    
+    # Gantt chart simulation
+    st.subheader("Work Schedule - Gantt Chart View")
+    
+    # Sample scheduling data
+    schedule_data = {
+        'Task': ['Well A - PM', 'Well B - Intervention', 'Well C - Repair', 'Platform Alpha - Shutdown', 'Well D - Testing'],
+        'Start': ['2025-02-01', '2025-02-05', '2025-02-10', '2025-02-15', '2025-02-20'],
+        'End': ['2025-02-03', '2025-02-08', '2025-02-14', '2025-02-18', '2025-02-22'],
+        'Platform': ['Platform_Alpha', 'Platform_Beta', 'Platform_Alpha', 'Platform_Alpha', 'Platform_Gamma'],
+        'Status': ['Planned', 'In Progress', 'Planned', 'Scheduled', 'Planned']
     }
-)
+    
+    schedule_df = pd.DataFrame(schedule_data)
+    schedule_df['Start'] = pd.to_datetime(schedule_df['Start'])
+    schedule_df['End'] = pd.to_datetime(schedule_df['End'])
+    
+    fig_gantt = px.timeline(schedule_df, x_start="Start", x_end="End", y="Task", 
+                           color="Platform", title="Work Schedule Timeline")
+    fig_gantt.update_yaxes(autorange="reversed")
+    st.plotly_chart(fig_gantt, use_container_width=True)
+    
+    # Shutdown maintenance plan
+    st.subheader("🔧 Shutdown Maintenance Forward Plan")
+    
+    shutdown_data = {
+        'Platform': ['Platform_Alpha', 'Platform_Beta', 'Platform_Gamma'],
+        'Next_Shutdown': ['2025-04-15', '2025-06-20', '2025-08-10'],
+        'Duration_Days': [5, 7, 4],
+        'Planned_Work': ['Compressor overhaul, Valve testing', 'Turbine maintenance, Safety systems', 'Electrical upgrades, Piping'],
+        'Status': ['Planned', 'Scheduled', 'Planning']
+    }
+    
+    shutdown_df = pd.DataFrame(shutdown_data)
+    st.dataframe(shutdown_df, use_container_width=True)
+    
+    # Work windows
+    st.subheader("⏰ Available Work Windows")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Weather Windows (Next 14 days):**")
+        weather_windows = [
+            "Feb 1-3: Excellent (Wave height <1m)",
+            "Feb 4-6: Good (Wave height 1-2m)",
+            "Feb 7-9: Poor (Wave height >3m)",
+            "Feb 10-12: Excellent (Wave height <1m)",
+            "Feb 13-14: Good (Wave height 1-2m)"
+        ]
+        for window in weather_windows:
+            st.write(f"• {window}")
+    
+    with col2:
+        st.write("**Operational Windows:**")
+        op_windows = [
+            "Platform Alpha: 24/7 operations",
+            "Platform Beta: Daylight only (06:00-18:00)",
+            "Platform Gamma: Limited access (Maintenance mode)"
+        ]
+        for window in op_windows:
+            st.write(f"• {window}")
 
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>Well Intervention AI Dashboard</strong> | Powered by 25 years of North Sea expertise + AI</p>
-    <p>🛢️ Predictive Analytics • 📊 Real-time Insights • 🎯 Optimized Planning</p>
-</div>
-""", unsafe_allow_html=True)
-'''
+elif page == "Tools & Equipment":
+    st.header("🔧 Tools & Equipment Management")
+    
+    # Equipment status overview
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        available_count = len(tools_df[tools_df['Status'] == 'Available'])
+        st.metric("Available Equipment", available_count, delta=2)
+    with col2:
+        in_use_count = len(tools_df[tools_df['Status'] == 'In Use'])
+        st.metric("Equipment In Use", in_use_count, delta=-1)
+    with col3:
+        maintenance_count = len(tools_df[tools_df['Status'] == 'Maintenance'])
+        st.metric("Under Maintenance", maintenance_count, delta=0)
+    
+    # Equipment table with links
+    st.subheader("Equipment Inventory")
+    
+    # Add information links
+    info_links = {
+        'Wireline Unit': 'https://petrowiki.org/Wireline_operations',
+        'Coiled Tubing': 'https://petrowiki.org/Coiled_tubing_operations',
+        'Wellhead Control Panel': 'https://en.wikipedia.org/wiki/Wellhead',
+        'Subsea Tree': 'https://petrowiki.org/Subsea_trees',
+        'Slickline Tools': 'https://petrowiki.org/Slickline_operations',
+        'Snubbing Unit': 'https://petrowiki.org/Snubbing',
+        'Pumping Unit': 'https://petrowiki.org/Artificial_lift',
+        'BOP Stack': 'https://petrowiki.org/Blowout_preventers',
+        'Workover Rig': 'https://petrowiki.org/Workover_operations',
+        'Logging Tools': 'https://petrowiki.org/Well_logging'
+    }
+    
+    # Enhanced tools display
+    for idx, tool in tools_df.iterrows():
+        with st.expander(f"🛠️ {tool['Tool_Equipment']} - {tool['Status']}"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.write(f"**Category:** {tool['Category']}")
+                st.write(f"**Description:** {tool['Description']}")
+                st.write(f"**Status:** {tool['Status']}")
+            
+            with col2:
+                st.write(f"**Next Maintenance:** {tool['Next_Maintenance']}")
+                if tool['Tool_Equipment'] in info_links:
+                    st.markdown(f"[📖 Technical Information]({info_links[tool['Tool_Equipment']]})")
+            
+            with col3:
+                if st.button(f"Schedule Use - {tool['Tool_Equipment']}", key=f"use_{idx}"):
+                    st.success(f"Usage scheduled for {tool['Tool_Equipment']}")
+                if st.button(f"Maintenance Log - {tool['Tool_Equipment']}", key=f"maint_{idx}"):
+                    st.info(f"Opening maintenance log for {tool['Tool_Equipment']}")
 
-# Save the Streamlit app to a file
-with open('well_intervention_dashboard.py', 'w') as f:
-    f.write(streamlit_app_code)
+elif page == "Logistics":
+    st.header("🚁 Logistics & Marine Operations")
+    
+    # Logistics overview
+    st.subheader("Logistics Requirements Overview")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Personnel Transport Schedule:**")
+        transport_schedule = [
+            "Feb 1: Helicopter to Platform Alpha (6 personnel)",
+            "Feb 2: Supply vessel to Platform Beta (Equipment)",
+            "Feb 3: Helicopter to Platform Gamma (4 personnel)",
+            "Feb 4: Crew change - All platforms",
+            "Feb 5: Emergency standby helicopter"
+        ]
+        for item in transport_schedule:
+            st.write(f"• {item}")
+    
+    with col2:
+        st.write("**Supply Requirements:**")
+        supply_reqs = [
+            "Chemicals: 500L acid, 200L inhibitor",
+            "Spares: Valve seats, O-rings, gaskets",
+            "Consumables: Lubricants, cleaning agents",
+            "Safety equipment: Gas detectors, PPE",
+            "Tools: Torque wrenches, pressure gauges"
+        ]
+        for item in supply_reqs:
+            st.write(f"• {item}")
+    
+    # Bed space tracker
+    st.subheader("🛏️ Platform Bed Space Tracker")
+    
+    fig_beds = px.bar(bed_space_df, x='Platform', y=['Occupied_Beds', 'Available_Beds'],
+                     title="Current Bed Space Utilization", barmode='stack',
+                     color_discrete_map={'Occupied_Beds': '#FF6B6B', 'Available_Beds': '#4ECDC4'})
+    st.plotly_chart(fig_beds, use_container_width=True)
+    
+    # Detailed bed space table
+    st.dataframe(bed_space_df, use_container_width=True)
+    
+    # Marine weather conditions
+    st.subheader("🌊 Marine Conditions")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Wave Height", "1.2m", delta="-0.3m")
+    with col2:
+        st.metric("Wind Speed", "15 knots", delta="2 knots")
+    with col3:
+        st.metric("Visibility", "8 km", delta="Good")
 
-# Create requirements.txt
-requirements_txt = '''streamlit>=1.28.0
-pandas>=1.5.0
-numpy>=1.24.0
-plotly>=5.15.0
-'''
-
-with open('requirements.txt', 'w') as f:
-    f.write(requirements_txt)
-
-# Create README with instructions
-readme_content = '''# Well Intervention AI Dashboard
-
-A comprehensive Streamlit dashboard for predicting and optimizing well intervention outcomes using AI and machine learning.
-
-## Features
-
-🎯 **Predictive Analytics**
-- Success probability prediction for interventions
-- NPT (Non-Productive Time) forecasting
-- Cost estimation and optimization
-
-📊 **Interactive Visualizations**
-- Success probability distributions
-- Risk factor analysis
-- Performance trends over time
-- Real-time planning assistant
-
-🔧 **Intervention Planning**
-- AI-powered outcome prediction
-- Risk assessment and recommendations
-- Cost-benefit analysis
-
-## Installation
-
-1. Install Python 3.8 or higher
-2. Install required packages:
-   ```bash
-   pip install -r requirements.txt
+elif page == "Work Disciplines":
+    st.header("👥 Work Disciplines & Personnel")
+    
+    # Personnel overview
+    st.subheader("Personnel Requirements vs Availability")
+    
+    fig_personnel = px.bar(disciplines_df, x='Discipline', y=['Personnel_Required', 'Current_Available'],
+                          title="Personnel Requirements by Discipline", barmode='group',
+                          color_discrete_map={'Personnel_Required': '#FF9999', 'Current_Available': '#66B2FF'})
+    fig_personnel.update_xaxes(tickangle=45)
+    st.plotly_chart(fig_personnel, use_container_width=True)
+    
+    # Detailed disciplines table
+    st.subheader("Discipline Details")
+    
+    for idx, discipline in disciplines_df.iterrows():
+        with st.expander(f"👨‍🔧 {discipline['Discipline']} - {discipline['Certification_Level']}"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.write(f"**Required Personnel:** {discipline['Personnel_Required']}")
+                st.write(f"**Currently Available:** {discipline['Current_Available']}")
+                shortage = discipline['Personnel_Required'] - discipline['Current_Available']
+                if shortage > 0:
+                    st.error(f"**Shortage:** {shortage} personnel")
+                else:
+                    st.success("**Status:** Fully staffed")
+            
+            with col2:
+                st.write(f"**Certification Level:** {discipline['Certification_Level']}")
+                st.write("**Key Responsibilities:**")
+                responsibilities = {
+                    'Well Services': ['Wireline operations', 'Coiled tubing', 'Well testing'],
+                    'Subsea Engineering': ['Tree maintenance', 'Umbilical repair', 'ROV operations'],
+                    'Production Technology': ['Process optimization', 'Flow assurance', 'Facility operations'],
+                    'Logistics & Marine': ['Supply coordination', 'Personnel transport', 'Marine operations'],
+                    'HSE': ['Safety oversight', 'Environmental compliance', 'Risk assessment'],
+                    'Instrumentation & Controls': ['Control system maintenance', 'Calibration', 'Automation'],
+                 
