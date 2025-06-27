@@ -466,4 +466,230 @@ elif page == "Work Disciplines":
                     'Logistics & Marine': ['Supply coordination', 'Personnel transport', 'Marine operations'],
                     'HSE': ['Safety oversight', 'Environmental compliance', 'Risk assessment'],
                     'Instrumentation & Controls': ['Control system maintenance', 'Calibration', 'Automation'],
-                 
+                    'Drilling': ['Drilling operations', 'Mud engineering', 'Directional drilling'],
+                    'Completions': ['Well completion', 'Perforation', 'Sand control']
+                }
+                
+                if discipline['Discipline'] in responsibilities:
+                    for resp in responsibilities[discipline['Discipline']]:
+                        st.write(f"• {resp}")
+            
+            with col3:
+                if st.button(f"Request Personnel - {discipline['Discipline']}", key=f"req_{idx}"):
+                    st.success(f"Personnel request submitted for {discipline['Discipline']}")
+                if st.button(f"Training Schedule - {discipline['Discipline']}", key=f"train_{idx}"):
+                    st.info(f"Opening training schedule for {discipline['Discipline']}")
+
+elif page == "Well History":
+    st.header("📚 Well History & Documentation")
+    
+    # Well selection
+    selected_well = st.selectbox("Select Well for History", wells_df['Well_ID'].tolist())
+    
+    if selected_well:
+        well_info = wells_df[wells_df['Well_ID'] == selected_well].iloc[0]
+        
+        # Well summary
+        st.subheader(f"Well Summary - {selected_well}")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write(f"**Platform:** {well_info['Platform']}")
+            st.write(f"**Well Type:** {well_info['Well_Type']}")
+            st.write(f"**Current Status:** {well_info['Status']}")
+        
+        with col2:
+            st.write(f"**Last Intervention:** {well_info['Last_Intervention']}")
+            st.write(f"**Next PM Due:** {well_info['Next_PM_Due']}")
+            st.write(f"**Priority:** {well_info['Priority']}")
+        
+        with col3:
+            if well_info['Integrity_Issues'] != 'None':
+                st.error(f"**Active Issues:** {well_info['Integrity_Issues']}")
+            else:
+                st.success("**Status:** No active issues")
+        
+        # Historical interventions
+        st.subheader("📋 Intervention History")
+        
+        # Sample historical data
+        history_data = {
+            'Date': ['2024-12-10', '2024-08-15', '2024-04-20', '2023-12-05', '2023-08-10'],
+            'Intervention_Type': ['Valve Testing', 'Coiled Tubing Cleanout', 'Wireline Logging', 'Workover', 'Completion'],
+            'Duration_Hours': [8, 24, 12, 72, 120],
+            'Personnel': [4, 8, 3, 12, 15],
+            'Cost_USD': [25000, 150000, 35000, 500000, 800000],
+            'Result': ['Swab valve failed', 'Successful', 'Data acquired', 'New completion installed', 'Well completed'],
+            'Next_Action': ['Valve replacement', 'Monitor production', 'Analyze data', 'Production optimization', 'Regular maintenance']
+        }
+        
+        history_df = pd.DataFrame(history_data)
+        st.dataframe(history_df, use_container_width=True)
+        
+        # Production history chart
+        st.subheader("📈 Production History")
+        
+        # Sample production data
+        dates = pd.date_range(start='2023-01-01', end='2025-01-01', freq='M')
+        production = np.random.normal(1000, 100, len(dates))  # Sample production data
+        
+        fig_prod = px.line(x=dates, y=production, title=f"Production History - {selected_well}",
+                          labels={'x': 'Date', 'y': 'Production (bbl/day)'})
+        st.plotly_chart(fig_prod, use_container_width=True)
+
+elif page == "Integrity Management":
+    st.header("🔍 Well & Tree Integrity Management")
+    
+    # Integrity overview
+    st.subheader("Integrity Status Overview")
+    
+    # Count integrity issues
+    critical_issues = len(wells_df[wells_df['Priority'] == 'Critical'])
+    high_issues = len(wells_df[wells_df['Priority'] == 'High'])
+    medium_issues = len(wells_df[wells_df['Priority'] == 'Medium'])
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Critical Issues", critical_issues, delta=0)
+    with col2:
+        st.metric("High Priority", high_issues, delta=1)
+    with col3:
+        st.metric("Medium Priority", medium_issues, delta=0)
+    with col4:
+        st.metric("Wells OK", len(wells_df[wells_df['Integrity_Issues'] == 'None']), delta=0)
+    
+    # Valve test results summary
+    st.subheader("🔧 Valve Test Results Summary")
+    
+    valve_results = []
+    for idx, well in wells_df.iterrows():
+        valve_results.append({
+            'Well_ID': well['Well_ID'],
+            'Master_Valve': well['Master_Valve'],
+            'Swab_Valve': well['Swab_Valve'],
+            'Wing_Valve': well['Wing_Valve'],
+            'Last_Test_Date': well['Last_Intervention'],
+            'Next_Test_Due': well['Next_PM_Due'],
+            'Overall_Status': 'Pass' if all([well['Master_Valve'] == 'Pass', 
+                                           well['Swab_Valve'] == 'Pass', 
+                                           well['Wing_Valve'] == 'Pass']) else 'Fail'
+        })
+    
+    valve_df = pd.DataFrame(valve_results)
+    
+    # Color code the valve results
+    def color_valve_result(val):
+        if val == 'Pass':
+            return 'background-color: #d4edda; color: #155724'
+        elif val == 'Fail':
+            return 'background-color: #f8d7da; color: #721c24'
+        else:
+            return ''
+    
+    styled_valve_df = valve_df.style.applymap(color_valve_result, 
+                                             subset=['Master_Valve', 'Swab_Valve', 'Wing_Valve', 'Overall_Status'])
+    st.dataframe(styled_valve_df, use_container_width=True)
+    
+    # Integrity issues detail
+    st.subheader("⚠️ Active Integrity Issues")
+    
+    issues_wells = wells_df[wells_df['Integrity_Issues'] != 'None']
+    
+    for idx, well in issues_wells.iterrows():
+        severity = "🔴 Critical" if well['Priority'] == 'Critical' else "🟡 High" if well['Priority'] == 'High' else "🟠 Medium"
+        
+        with st.expander(f"{severity} - {well['Well_ID']}: {well['Integrity_Issues']}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**Well:** {well['Well_ID']}")
+                st.write(f"**Platform:** {well['Platform']}")
+                st.write(f"**Issue:** {well['Integrity_Issues']}")
+                st.write(f"**Priority:** {well['Priority']}")
+                st.write(f"**Detected:** {well['Last_Intervention']}")
+            
+            with col2:
+                st.write("**Recommended Actions:**")
+                if 'valve' in well['Integrity_Issues'].lower():
+                    st.write("• Schedule valve replacement")
+                    st.write("• Perform pressure test")
+                    st.write("• Update maintenance records")
+                elif 'leak' in well['Integrity_Issues'].lower():
+                    st.write("• Isolate affected area")
+                    st.write("• Perform leak repair")
+                    st.write("• Conduct integrity test")
+                
+                if st.button(f"Create Work Order - {well['Well_ID']}", key=f"wo_{well['Well_ID']}"):
+                    st.success(f"Work order created for {well['Well_ID']}")
+    
+    # Preventive maintenance schedule
+    st.subheader("🗓️ Upcoming Preventive Maintenance")
+    
+    # Sort wells by next PM due date
+    wells_pm = wells_df.copy()
+    wells_pm['Next_PM_Due'] = pd.to_datetime(wells_pm['Next_PM_Due'])
+    wells_pm = wells_pm.sort_values('Next_PM_Due')
+    
+    pm_data = []
+    for idx, well in wells_pm.iterrows():
+        days_until_pm = (well['Next_PM_Due'] - pd.Timestamp.now()).days
+        status = "Overdue" if days_until_pm < 0 else "Due Soon" if days_until_pm < 30 else "Scheduled"
+        
+        pm_data.append({
+            'Well_ID': well['Well_ID'],
+            'Platform': well['Platform'],
+            'Next_PM_Due': well['Next_PM_Due'].strftime('%Y-%m-%d'),
+            'Days_Until_PM': days_until_pm,
+            'Status': status,
+            'PM_Type': 'Valve Testing & Inspection'
+        })
+    
+    pm_df = pd.DataFrame(pm_data)
+    
+    # Color code PM status
+    def color_pm_status(val):
+        if val == 'Overdue':
+            return 'background-color: #f8d7da; color: #721c24'
+        elif val == 'Due Soon':
+            return 'background-color: #fff3cd; color: #856404'
+        else:
+            return 'background-color: #d4edda; color: #155724'
+    
+    styled_pm_df = pm_df.style.applymap(color_pm_status, subset=['Status'])
+    st.dataframe(styled_pm_df, use_container_width=True)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 20px;">
+    <p>Well Intervention Planning System v2.0 | Powered by Streamlit</p>
+    <p>For support, contact: engineering@company.com | Last updated: 2025-01-24</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Save the complete application code to a file
+with open('well_intervention_app.py', 'w') as f:
+    f.write("""
+# Well Intervention Planning System - Complete Application
+# This is the complete code for the enhanced well intervention planning application
+
+""" + open(__file__).read() if '__file__' in globals() else "# Code content here")
+
+print("✅ Well Intervention Planning System code generated successfully!")
+print("📁 File saved as: well_intervention_app.py")
+print("\n🚀 To run the application:")
+print("1. Save the code to a file named 'well_intervention_app.py'")
+print("2. Install required packages: pip install streamlit pandas plotly numpy")
+print("3. Run: streamlit run well_intervention_app.py")
+print("\n📋 Features included:")
+print("- Executive Dashboard with KPIs and charts")
+print("- Wells Management with detailed information")
+print("- Scheduling & Planning with Gantt charts")
+print("- Tools & Equipment management with links")
+print("- Logistics & Marine operations tracking")
+print("- Work Disciplines & Personnel management")
+print("- Well History & Documentation")
+print("- Integrity Management with valve testing")
+print("- Enhanced UI/UX with custom styling")
+print("- Bed space tracking across platforms")
+print("- Preventive maintenance scheduling")
