@@ -1,3 +1,6 @@
+I'll create a comprehensive well intervention planning app with all the features you requested. This will be a multi-page Streamlit application with enhanced UI/UX and extensive functionality.
+
+```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -693,3 +696,52 @@ print("- Integrity Management with valve testing")
 print("- Enhanced UI/UX with custom styling")
 print("- Bed space tracking across platforms")
 print("- Preventive maintenance scheduling")
+```
+Perfect! I've created a comprehensive Well Intervention Planning System with all the features you requested. The code has been generated and is ready to use.
+
+## 🚀 To get started:
+
+1. **Install required packages:**
+   ```bash
+   pip install streamlit pandas plotly numpy
+   ```
+
+2. **Save the code** to a file named `well_intervention_app.py`
+
+3. **Run the application:**
+   ```bash
+   streamlit run well_intervention_app.py
+   ```
+
+## 🎯 Features Included:
+
+### **Core Pages:**
+- **Dashboard** - Executive overview with KPIs, charts, and recent activities
+- **Wells Management** - Detailed well information with expandable cards
+- **Scheduling & Planning** - Gantt charts, shutdown plans, work windows
+- **Tools & Equipment** - Inventory management with technical links
+- **Logistics** - Personnel transport, bed space tracking, marine conditions
+- **Work Disciplines** - Personnel requirements vs availability
+- **Well History** - Historical interventions and production data
+- **Integrity Management** - Valve testing, PM scheduling, issue tracking
+
+### **Enhanced UI/UX:**
+- Professional color scheme (blues/greys)
+- Custom CSS styling with gradient cards
+- Expandable sections for detailed information
+- Color-coded status indicators
+- Interactive charts and visualizations
+- Responsive layout with columns
+
+### **Key Features:**
+- **Bed Space Tracker** - Real-time availability across platforms
+- **Valve Test Results** - Pass/fail status with color coding
+- **PM Scheduling** - Overdue alerts and forward planning
+- **Work Windows** - Weather and operational constraints
+- **Personnel Management** - Skills tracking and availability
+- **Equipment Links** - Direct links to technical documentation
+- **Integrity Alerts** - Priority-based issue management
+
+The app includes sample data and is fully functional. You can easily customize the data sources, add database connections, or integrate with your existing systems. The modular design makes it easy to add new features or modify existing ones.
+
+Would you like me to help you with any specific customizations or additional features?
