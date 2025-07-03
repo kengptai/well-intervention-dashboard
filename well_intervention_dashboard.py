@@ -1,3 +1,9 @@
+"""
+I'll create a comprehensive well intervention planning app with all the features you requested.
+This will be a multi-page Streamlit application with enhanced UI/UX and extensive functionality.
+"""
+
+# Your actual code (e.g., import streamlit as st) starts here
 I'll create a comprehensive well intervention planning app with all the features you requested. This will be a multi-page Streamlit application with enhanced UI/UX and extensive functionality.
 
 ```python
